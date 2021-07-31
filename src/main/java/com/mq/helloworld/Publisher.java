@@ -27,7 +27,7 @@ public class Publisher {
 
         //3.发布消息到exchange,同时制定路由的规则
         //参数1:指定exchange,使用"",表示使用默认的方式
-        //参数2:指定路由的规则,使用具体的队列名称
+        //参数2:指定路由的规则,可有可无,可使用具体的队列名称
         //参数3:指定传递的消息所携带的propeities
         //参数4:指定发布的具体消息,byte[]类型
         channel.basicPublish("","HelloWorld_Test01",null,msg.getBytes());
