@@ -3,7 +3,9 @@ package com.mq.helloworld;
 import com.mq.config.RabbitMQ;
 import com.rabbitmq.client.*;
 import org.junit.Test;
+import redis.clients.jedis.Jedis;
 
+import javax.swing.*;
 import java.io.IOException;
 import java.util.concurrent.TimeoutException;
 
@@ -18,7 +20,7 @@ public class Consumer {
 
 
         //2.创建channel,连接队列
-        Channel channel = connection.createChannel();
+        final Channel channel = connection.createChannel();
 
         //3.声明队列-helloworld
         //参数1:queue - 指定消费队列名称
@@ -37,7 +39,32 @@ public class Consumer {
             //重写handleDelivery方法
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                System.out.println("接收到消息:"+new String(body,"UTF-8"));
+                //获取属性值,获取生产者传递过来的唯一标识
+                String messageId = properties.getMessageId();
+
+                //连接Redis
+                Jedis jedis = new Jedis("localhost",6379);
+
+                //1.通过setnx到Redis,默认指定value = 0
+                String result = jedis.set(messageId,"0","NX","EX",10);
+
+                //2.消费成功,将messageID放到redis中,并设置value=1
+                //参数3:采用nx方式,相当于setnx
+                //参数4:是否设置有效期
+                //参数5:设置过期时长 10秒钟
+                if (result != null && result.equalsIgnoreCase("OK")){
+                    System.out.println("接收到消息:"+new String(body,"UTF-8"));
+                    jedis.set(messageId,"1");
+                    channel.basicAck(envelope.getDeliveryTag(),false);
+                }
+                //3.如果1中的setnx失败,获取messageId对应的当前的value,如果是0,则不做任何事,如果是1,则返回ack
+                else{
+                    String s = jedis.get(messageId);
+                    if("1".equalsIgnoreCase(s)){
+                        //如果返回的value为1,则手动ack告诉rabbitMQ消费完了
+                        channel.basicAck(envelope.getDeliveryTag(),false);
+                    }
+                }
             }
         };
 
